@@ -30,17 +30,22 @@ def load_posts():
         return ["Тестовый пост"]
 
 def get_image_from_pexels(keywords):
+    print(f"DEBUG: Ищу картинку в Pexels по запросу: {keywords}")
     if not PEXELS_API_KEY:
+        print("DEBUG: PEXELS_API_KEY не найден в окружении")
         return None
     try:
         url = "https://api.pexels.com/v1/search"
         headers = {"Authorization": PEXELS_API_KEY}
         params = {"query": keywords, "per_page": 5, "orientation": "landscape"}
-        response = requests.get(url, headers=headers, params=params, timeout=5)
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        print(f"DEBUG: Pexels ответил со статусом: {response.status_code}")
         data = response.json()
         if data.get('photos') and len(data['photos']) > 0:
             photo = random.choice(data['photos'])
+            print(f"DEBUG: Нашёл картинку: {photo['src']['large'][:50]}...")
             return photo['src']['large']
+        print("DEBUG: Pexels не нашёл картинок")
         return None
     except Exception as e:
         print(f"Ошибка Pexels: {e}")
@@ -73,7 +78,9 @@ def extract_keywords(text):
     }
     text_lower = text.lower()
     keywords = [en for ru, en in word_map.items() if ru in text_lower]
-    return ' '.join(keywords) if keywords else 'trading'
+    result = ' '.join(keywords) if keywords else 'trading'
+    print(f"DEBUG: Из текста извлёк ключевые слова: {result}")
+    return result
 
 def send_photo_with_caption(chat_id, image_url, caption):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
@@ -105,6 +112,7 @@ def webhook():
 
     chat_id = data['message']['chat']['id']
     text = data['message'].get('text', '')
+    print(f"DEBUG: Получена команда: {text} от {chat_id}")
 
     if text == '/start':
         send_message(chat_id, "🤖 Бот для Alpha Trades запущен!\nИспользуй /post для публикации")
@@ -125,10 +133,12 @@ def webhook():
             if local_img:
                 base_url = "https://alpha-trades-bot.onrender.com"
                 image_url = f"{base_url}{local_img}"
+                print(f"DEBUG: Использую локальную картинку: {image_url}")
 
         if image_url:
             send_photo_with_caption(CHANNEL_ID, image_url, post_text)
         else:
+            print("DEBUG: Картинка не найдена, отправляю только текст")
             send_message(CHANNEL_ID, post_text)
 
         state['index'] = next_idx
