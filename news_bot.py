@@ -1,7 +1,7 @@
 import requests
 import os
 from flask import Flask
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 
 app = Flask(__name__)
 
@@ -13,14 +13,16 @@ RUSSIAN_API_URL = "https://cryptocurrency.cv/api/news?lang=ru&limit=10"
 # Запасное API, английские новости
 ENGLISH_API_URL = "https://cryptocurrency.cv/api/news?lang=en&limit=10"
 
-translator = Translator()
+# Инициализация переводчика (один раз)
+translator = GoogleTranslator(source='en', target='ru')
 
 def translate_title(title):
     """Переводит заголовок с английского на русский"""
     try:
-        translated = translator.translate(title, src='en', dest='ru')
-        return translated.text
-    except:
+        translated = translator.translate(title)
+        return translated
+    except Exception as e:
+        print(f"Ошибка перевода: {e}")
         return title  # Если перевод не удался, возвращаем оригинал
 
 def fetch_news():
@@ -107,11 +109,5 @@ def home():
     return "News bot ready. Use /publish to trigger", 200
 
 if __name__ == "__main__":
-    # Установим модуль для перевода (если его нет, он установится автоматически при первом запуске)
-    try:
-        import googletrans
-    except ImportError:
-        import subprocess
-        subprocess.run(['pip', 'install', 'googletrans==4.0.0-rc1'])
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
