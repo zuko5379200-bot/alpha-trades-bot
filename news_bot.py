@@ -5,7 +5,6 @@ import threading
 from datetime import datetime
 from flask import Flask
 
-# Устанавливаем московский часовой пояс
 os.environ['TZ'] = 'Europe/Moscow'
 time.tzset()
 
@@ -75,20 +74,10 @@ def main():
     print(f"[{datetime.now()}] ✅ ГОТОВО - отправлено {len(news)} постов")
 
 def schedule_loop():
-    import schedule
     print("⏰ Планировщик запущен")
-    print("📅 Тест: отправка через 10 секунд, затем каждые 2 минуты")
-    
-    # Запускаем через 10 секунд после старта
-    time.sleep(10)
+    print("📅 Тест: отправка через 5 секунд")
+    time.sleep(5)
     main()
-    
-    # Затем каждые 2 минуты
-    schedule.every(2).minutes.do(main)
-    
-    while True:
-        schedule.run_pending()
-        time.sleep(30)
 
 @app.route('/')
 def home():
