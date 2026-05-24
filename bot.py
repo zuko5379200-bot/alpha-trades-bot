@@ -1,12 +1,14 @@
 import os
 import json
-from flask import Flask, request
+import random
 import requests
+from flask import Flask, request
 
 app = Flask(__name__)
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = "-1003900711058"
+PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
 
 def load_state():
     try:
@@ -25,16 +27,71 @@ def load_posts():
             content = f.read()
         return [p.strip() for p in content.split('---') if p.strip()]
     except:
-        return ["Тестовый пост 1", "Тестовый пост 2"]
+        return ["Тестовый пост"]
+
+def get_image_from_pexels(keywords):
+    if not PEXELS_API_KEY:
+        return None
+    try:
+        url = "https://api.pexels.com/v1/search"
+        headers = {"Authorization": PEXELS_API_KEY}
+        params = {"query": keywords, "per_page": 5, "orientation": "landscape"}
+        response = requests.get(url, headers=headers, params=params, timeout=5)
+        data = response.json()
+        if data.get('photos') and len(data['photos']) > 0:
+            photo = random.choice(data['photos'])
+            return photo['src']['large']
+        return None
+    except Exception as e:
+        print(f"Ошибка Pexels: {e}")
+        return None
+
+def get_local_image():
+    try:
+        images_dir = "images"
+        if not os.path.exists(images_dir):
+            return None
+        images = [f for f in os.listdir(images_dir) if f.endswith(('.jpg', '.jpeg', '.png', '.gif'))]
+        if images:
+            return f"/{images_dir}/{random.choice(images)}"
+        return None
+    except Exception as e:
+        print(f"Ошибка локальной картинки: {e}")
+        return None
+
+def extract_keywords(text):
+    word_map = {
+        'биткоин': 'bitcoin', 'btc': 'bitcoin',
+        'эфир': 'ethereum', 'eth': 'ethereum',
+        'трейдинг': 'trading',
+        'график': 'chart',
+        'прибыль': 'profit',
+        'опцион': 'options',
+        'рынок': 'market',
+        'анализ': 'analysis',
+        'стратегия': 'strategy'
+    }
+    text_lower = text.lower()
+    keywords = [en for ru, en in word_map.items() if ru in text_lower]
+    return ' '.join(keywords) if keywords else 'trading'
+
+def send_photo_with_caption(chat_id, image_url, caption):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+    try:
+        response = requests.post(url, json={"chat_id": chat_id, "photo": image_url, "caption": caption, "parse_mode": "Markdown"})
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Ошибка отправки фото: {e}")
+        return False
 
 def send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     try:
-        response = requests.post(url, json={"chat_id": chat_id, "text": text})
-        print(f"DEBUG: Отправка в {chat_id}, статус: {response.status_code}")
-        print(f"DEBUG: Ответ Telegram: {response.text}")
+        response = requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"})
+        return response.status_code == 200
     except Exception as e:
         print(f"Ошибка: {e}")
+        return False
 
 @app.route('/')
 def home():
@@ -49,8 +106,6 @@ def webhook():
     chat_id = data['message']['chat']['id']
     text = data['message'].get('text', '')
 
-    print(f"DEBUG: Получена команда: {text} от {chat_id}")
-
     if text == '/start':
         send_message(chat_id, "🤖 Бот для Alpha Trades запущен!\nИспользуй /post для публикации")
 
@@ -58,12 +113,24 @@ def webhook():
         posts = load_posts()
         state = load_state()
         next_idx = state['index'] + 1
-
         if next_idx >= len(posts):
             send_message(chat_id, "🏁 Все посты опубликованы!")
             return "OK", 200
 
-        send_message(CHANNEL_ID, posts[next_idx])
+        post_text = posts[next_idx]
+        keywords = extract_keywords(post_text)
+        image_url = get_image_from_pexels(keywords)
+        if not image_url:
+            local_img = get_local_image()
+            if local_img:
+                base_url = "https://alpha-trades-bot.onrender.com"
+                image_url = f"{base_url}{local_img}"
+
+        if image_url:
+            send_photo_with_caption(CHANNEL_ID, image_url, post_text)
+        else:
+            send_message(CHANNEL_ID, post_text)
+
         state['index'] = next_idx
         save_state(state)
         send_message(chat_id, f"✅ Пост #{next_idx+1} отправлен в канал!")
@@ -74,14 +141,14 @@ def webhook():
         total = len(posts)
         sent = state['index'] + 1
         remaining = total - sent
-        send_message(chat_id, f"📊 Статистика:\nВсего постов: {total}\nОтправлено: {sent}\nОсталось: {remaining}")
+        send_message(chat_id, f"📊 Статистика:\nВсего: {total}\nОтправлено: {sent}\nОсталось: {remaining}")
 
     elif text == '/reset':
         save_state({"index": -1})
         send_message(chat_id, "🔄 Прогресс сброшен!")
 
     elif text == '/help':
-        send_message(chat_id, "📋 Команды:\n/start - запуск\n/post - отправить пост\n/status - статистика\n/reset - сброс прогресса\n/help - помощь")
+        send_message(chat_id, "📋 Команды:\n/start\n/post\n/status\n/reset\n/help")
 
     return "OK", 200
 
