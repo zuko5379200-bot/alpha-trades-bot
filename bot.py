@@ -68,9 +68,20 @@ def webhook():
         save_state(state)
         send_message(chat_id, f"✅ Пост #{next_idx+1} отправлен в канал!")
 
+    elif text == '/status':
+        posts = load_posts()
+        state = load_state()
+        total = len(posts)
+        sent = state['index'] + 1
+        remaining = total - sent
+        send_message(chat_id, f"📊 Статистика:\nВсего постов: {total}\nОтправлено: {sent}\nОсталось: {remaining}")
+
     elif text == '/reset':
         save_state({"index": -1})
         send_message(chat_id, "🔄 Прогресс сброшен!")
+
+    elif text == '/help':
+        send_message(chat_id, "📋 Команды:\n/start - запуск\n/post - отправить пост\n/status - статистика\n/reset - сброс прогресса\n/help - помощь")
 
     return "OK", 200
 
