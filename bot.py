@@ -34,7 +34,7 @@ def send_message(chat_id, text):
     except Exception as e:
         print(f"Ошибка: {e}")
 
-@app.route(f"/webhook/{BOT_TOKEN}", methods=['POST'])
+@app.route("/webhook", methods=['POST'])
 def webhook():
     data = request.get_json()
     if not data or 'message' not in data:
