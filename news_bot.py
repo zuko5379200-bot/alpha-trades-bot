@@ -69,15 +69,10 @@ def main():
 def schedule_loop():
     import schedule
     
-    # ТЕСТ: 15:30 МСК = 05:30 в Орегоне (UTC-7)
-    schedule.every().day.at("05:30").do(main)
-    
-    # Постоянное расписание (потом раскомментируешь)
-    # schedule.every().day.at("00:00").do(main)   # 10:00 МСК
-    # schedule.every().day.at("05:00").do(main)   # 15:00 МСК
-    # schedule.every().day.at("09:00").do(main)   # 19:00 МСК
+    # ТЕСТ: 15:35 МСК = 05:35 в Орегоне
+    schedule.every().day.at("05:35").do(main)
 
-    print("⏰ Планировщик запущен. Тест в 15:30 МСК (05:30 сервер)")
+    print("⏰ Планировщик запущен. Тест в 15:35 МСК")
     while True:
         schedule.run_pending()
         time.sleep(30)
