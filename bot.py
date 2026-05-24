@@ -75,11 +75,4 @@ def webhook():
     return "OK", 200
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))    elif text == '/reset':
-        save_state({"index": -1})
-        send_message(chat_id, "🔄 Прогресс сброшен!")
-
-    return "OK", 200
-
-if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
