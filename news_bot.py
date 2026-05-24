@@ -6,14 +6,18 @@ app = Flask(__name__)
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = "-1003900711058"
-NEWS_API_URL = "https://cryptocurrency.cv/api/news?lang=ru"
+
+# Расширенный API-запрос: русский язык, больше лимит, больше источников
+NEWS_API_URL = "https://cryptocurrency.cv/api/news?lang=ru&limit=10&sources=forklog,cointelegraph,8btc,odaily,bitnovosti,blockchain24,miningru,crypto.ru"
 
 def fetch_news():
     try:
-        r = requests.get(NEWS_API_URL, timeout=10)
+        print("🔄 Запрос новостей...")
+        r = requests.get(NEWS_API_URL, timeout=15)
         data = r.json()
         articles = data.get('articles', data.get('news', []))
         if not articles:
+            print("❌ Новостей нет")
             return []
         result = []
         for item in articles[:5]:
@@ -24,6 +28,7 @@ def fetch_news():
                 'url': item.get('url', ''),
                 'image': image
             })
+        print(f"✅ Найдено {len(result)} новостей")
         return result
     except Exception as e:
         print(f"Ошибка: {e}")
@@ -32,16 +37,18 @@ def fetch_news():
 def send_photo(chat_id, image_url, caption):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
     try:
-        requests.post(url, json={"chat_id": chat_id, "photo": image_url, "caption": caption, "parse_mode": "Markdown"})
+        r = requests.post(url, json={"chat_id": chat_id, "photo": image_url, "caption": caption, "parse_mode": "Markdown"})
+        print(f"Фото отправлено, статус: {r.status_code}")
     except Exception as e:
-        print(e)
+        print(f"Ошибка фото: {e}")
 
 def send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     try:
-        requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"})
+        r = requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"})
+        print(f"Текст отправлен, статус: {r.status_code}")
     except Exception as e:
-        print(e)
+        print(f"Ошибка текста: {e}")
 
 def format_caption(item):
     return f"📰 *{item['title']}*\n\n{item['summary']}\n\n🔗 [Читать]({item['url']})\n---\n💡 *Alpha Trades*"
