@@ -17,10 +17,12 @@ app = Flask(__name__)
 
 def fetch_news():
     try:
+        print(f"[{datetime.now()}] Запрашиваю новости...")
         r = requests.get(NEWS_API_URL, timeout=10)
         data = r.json()
         articles = data.get('articles', data.get('news', []))
         if not articles:
+            print("Новостей нет")
             return []
         result = []
         for item in articles[:5]:
@@ -31,6 +33,7 @@ def fetch_news():
                 'url': item.get('url', ''),
                 'image': image
             })
+        print(f"Найдено {len(result)} новостей")
         return result
     except Exception as e:
         print(f"Ошибка: {e}")
@@ -39,48 +42,50 @@ def fetch_news():
 def send_photo(chat_id, image_url, caption):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
     try:
-        requests.post(url, json={"chat_id": chat_id, "photo": image_url, "caption": caption, "parse_mode": "Markdown"})
+        r = requests.post(url, json={"chat_id": chat_id, "photo": image_url, "caption": caption, "parse_mode": "Markdown"})
+        print(f"Фото отправлено, статус: {r.status_code}")
     except Exception as e:
-        print(e)
+        print(f"Ошибка фото: {e}")
 
 def send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     try:
-        requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"})
+        r = requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"})
+        print(f"Текст отправлен, статус: {r.status_code}")
     except Exception as e:
-        print(e)
+        print(f"Ошибка текста: {e}")
 
 def format_caption(item):
     return f"📰 *{item['title']}*\n\n{item['summary']}\n\n🔗 [Читать]({item['url']})\n---\n💡 *Alpha Trades*"
 
 def main():
-    print(f"[{datetime.now()}] 🔄 Сбор новостей...")
+    print(f"[{datetime.now()}] 🔄 СБОР НОВОСТЕЙ СТАРТ")
     news = fetch_news()
     if not news:
-        print("Нет новостей")
+        print("Нет новостей для отправки")
         return
-    for item in news:
+    for i, item in enumerate(news):
+        print(f"Отправляю пост {i+1}/{len(news)}")
         caption = format_caption(item)
         if item['image']:
             send_photo(CHANNEL_ID, item['image'], caption)
         else:
             send_message(CHANNEL_ID, caption)
         time.sleep(3)
-    print(f"[{datetime.now()}] ✅ Отправлено {len(news)} постов")
+    print(f"[{datetime.now()}] ✅ ГОТОВО - отправлено {len(news)} постов")
 
 def schedule_loop():
     import schedule
+    print("⏰ Планировщик запущен")
+    print("📅 Тест: отправка через 10 секунд, затем каждые 2 минуты")
     
-    # ТЕСТ: 15:45 МСК
-    schedule.every().day.at("15:45").do(main)
+    # Запускаем через 10 секунд после старта
+    time.sleep(10)
+    main()
     
-    # Постоянное расписание (потом раскомментируешь)
-    # schedule.every().day.at("10:00").do(main)
-    # schedule.every().day.at("15:00").do(main)
-    # schedule.every().day.at("19:00").do(main)
-
-    print("⏰ Планировщик запущен (Московское время)")
-    print("📅 Тест сегодня в 15:45 МСК")
+    # Затем каждые 2 минуты
+    schedule.every(2).minutes.do(main)
+    
     while True:
         schedule.run_pending()
         time.sleep(30)
