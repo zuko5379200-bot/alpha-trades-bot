@@ -30,11 +30,17 @@ def load_posts():
 def send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     try:
-        requests.post(url, json={"chat_id": chat_id, "text": text})
+        response = requests.post(url, json={"chat_id": chat_id, "text": text})
+        print(f"DEBUG: Отправка в {chat_id}, статус: {response.status_code}")
+        print(f"DEBUG: Ответ Telegram: {response.text}")
     except Exception as e:
         print(f"Ошибка: {e}")
 
-@app.route("/webhook", methods=['POST'])
+@app.route('/')
+def home():
+    return "Bot is alive!", 200
+
+@app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
     if not data or 'message' not in data:
@@ -42,6 +48,8 @@ def webhook():
 
     chat_id = data['message']['chat']['id']
     text = data['message'].get('text', '')
+
+    print(f"DEBUG: Получена команда: {text} от {chat_id}")
 
     if text == '/start':
         send_message(chat_id, "🤖 Бот для Alpha Trades запущен!\nИспользуй /post для публикации")
@@ -61,6 +69,13 @@ def webhook():
         send_message(chat_id, f"✅ Пост #{next_idx+1} отправлен в канал!")
 
     elif text == '/reset':
+        save_state({"index": -1})
+        send_message(chat_id, "🔄 Прогресс сброшен!")
+
+    return "OK", 200
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))    elif text == '/reset':
         save_state({"index": -1})
         send_message(chat_id, "🔄 Прогресс сброшен!")
 
