@@ -8,25 +8,19 @@ app = Flask(__name__)
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = "-1003900711058"
 
-# Основное API, русские новости
 RUSSIAN_API_URL = "https://cryptocurrency.cv/api/news?lang=ru&limit=10"
-# Запасное API, английские новости
 ENGLISH_API_URL = "https://cryptocurrency.cv/api/news?lang=en&limit=10"
 
-# Инициализация переводчика (один раз)
 translator = GoogleTranslator(source='en', target='ru')
 
 def translate_title(title):
-    """Переводит заголовок с английского на русский"""
     try:
-        translated = translator.translate(title)
-        return translated
+        return translator.translate(title)
     except Exception as e:
         print(f"Ошибка перевода: {e}")
-        return title  # Если перевод не удался, возвращаем оригинал
+        return title
 
 def fetch_news():
-    # Сначала пробуем получить русские новости
     try:
         print("🔍 Поиск русских новостей...")
         r = requests.get(RUSSIAN_API_URL, timeout=15)
@@ -36,21 +30,20 @@ def fetch_news():
             print(f"✅ Найдено {len(articles)} русских новостей")
             return articles[:5], 'ru'
     except Exception as e:
-        print(f"Ошибка при запросе русских новостей: {e}")
+        print(f"Ошибка: {e}")
 
-    # Если русских нет, берём английские и переводим заголовки
     try:
-        print("⚠️ Русских новостей нет, загружаю английские...")
+        print("⚠️ Русских нет, загружаю английские...")
         r = requests.get(ENGLISH_API_URL, timeout=15)
         data = r.json()
         articles = data.get('articles', data.get('news', []))
         if articles:
-            print(f"✅ Найдено {len(articles)} английских новостей (заголовки будут переведены)")
+            print(f"✅ Найдено {len(articles)} английских новостей")
             return articles[:5], 'en'
     except Exception as e:
-        print(f"Ошибка при запросе английских новостей: {e}")
+        print(f"Ошибка: {e}")
 
-    print("❌ Новостей нет ни на русском, ни на английском")
+    print("❌ Новостей нет")
     return [], None
 
 def send_photo(chat_id, image_url, caption):
@@ -70,43 +63,32 @@ def send_message(chat_id, text):
         print(f"Ошибка текста: {e}")
 
 def format_caption(item, language):
-    """Форматирует пост. Если язык английский — переводит заголовок"""
     title = item.get('title', 'Новость')
     if language == 'en':
         title = translate_title(title)
-        title = f"🌐 {title}"  # Добавляем значок, что новость переведена
-
+        title = f"🌐 {title}"
     summary = (item.get('description') or '')[:300]
     url = item.get('url', '')
-    
-    return (f"📰 *{title}*\n\n"
-            f"{summary}\n\n"
-            f"🔗 [Читать полностью]({url})\n"
-            f"---\n"
-            f"💡 *Alpha Trades*")
+    return (f"📰 *{title}*\n\n{summary}\n\n🔗 [Читать]({url})\n---\n💡 *Alpha Trades*")
 
 @app.route('/publish')
 def publish():
-    print("🔄 Публикация новостей по запросу")
-    news_articles, language = fetch_news()
-    
-    if not news_articles:
-        return "Нет новостей для публикации", 200
-
-    for item in news_articles:
-        caption = format_caption(item, language)
+    print("🔄 Публикация новостей")
+    news, lang = fetch_news()
+    if not news:
+        return "Нет новостей", 200
+    for item in news:
+        caption = format_caption(item, lang)
         image = item.get('urlToImage') or item.get('image') or item.get('media')
-        
         if image:
             send_photo(CHANNEL_ID, image, caption)
         else:
             send_message(CHANNEL_ID, caption)
-    
-    return f"Отправлено {len(news_articles)} новостей (источник: {'русский' if language == 'ru' else 'английский + перевод'})", 200
+    return f"Отправлено {len(news)} новостей", 200
 
 @app.route('/')
 def home():
-    return "News bot ready. Use /publish to trigger", 200
+    return "News bot ready", 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
