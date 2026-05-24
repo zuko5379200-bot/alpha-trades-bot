@@ -129,9 +129,10 @@ def schedule_checker():
     """Функция планировщика, работает в фоновом потоке"""
     import schedule
     # Устанавливаем расписание (Московское время)
-    schedule.every().day.at("10:00").do(main)
-    schedule.every().day.at("15:00").do(main)
-    schedule.every().day.at("19:00").do(main)
+    schedule.every().day.at("12:10").do(main)   # 15:10 МСК
+schedule.every().day.at("07:00").do(main)   # 10:00 МСК
+schedule.every().day.at("12:00").do(main)   # 15:00 МСК
+schedule.every().day.at("16:00").do(main)   # 19:00 МСК
     
     print("⏰ Планировщик запущен.")
     print("📅 Расписание: 10:00, 15:00, 19:00 по Москве")
