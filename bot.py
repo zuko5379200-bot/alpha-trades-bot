@@ -6,7 +6,7 @@ import requests
 app = Flask(__name__)
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-CHANNEL_ID = "-3900711058"
+CHANNEL_ID = "-1003900711058"
 
 def load_state():
     try:
