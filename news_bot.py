@@ -5,6 +5,10 @@ import threading
 from datetime import datetime
 from flask import Flask
 
+# Устанавливаем московский часовой пояс
+os.environ['TZ'] = 'Europe/Moscow'
+time.tzset()
+
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = "-1003900711058"
 NEWS_API_URL = "https://cryptocurrency.cv/api/news?lang=ru"
@@ -35,18 +39,16 @@ def fetch_news():
 def send_photo(chat_id, image_url, caption):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
     try:
-        r = requests.post(url, json={"chat_id": chat_id, "photo": image_url, "caption": caption, "parse_mode": "Markdown"})
-        return r.status_code == 200
-    except:
-        return False
+        requests.post(url, json={"chat_id": chat_id, "photo": image_url, "caption": caption, "parse_mode": "Markdown"})
+    except Exception as e:
+        print(e)
 
 def send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     try:
-        r = requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"})
-        return r.status_code == 200
-    except:
-        return False
+        requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"})
+    except Exception as e:
+        print(e)
 
 def format_caption(item):
     return f"📰 *{item['title']}*\n\n{item['summary']}\n\n🔗 [Читать]({item['url']})\n---\n💡 *Alpha Trades*"
@@ -69,17 +71,23 @@ def main():
 def schedule_loop():
     import schedule
     
-    # ТЕСТ: 15:35 МСК = 05:35 в Орегоне
-    schedule.every().day.at("05:35").do(main)
+    # ТЕСТ: 15:45 МСК
+    schedule.every().day.at("15:45").do(main)
+    
+    # Постоянное расписание (потом раскомментируешь)
+    # schedule.every().day.at("10:00").do(main)
+    # schedule.every().day.at("15:00").do(main)
+    # schedule.every().day.at("19:00").do(main)
 
-    print("⏰ Планировщик запущен. Тест в 15:35 МСК")
+    print("⏰ Планировщик запущен (Московское время)")
+    print("📅 Тест сегодня в 15:45 МСК")
     while True:
         schedule.run_pending()
         time.sleep(30)
 
 @app.route('/')
 def home():
-    return "News bot running", 200
+    return "News bot running (MSK timezone)", 200
 
 if __name__ == "__main__":
     thread = threading.Thread(target=schedule_loop)
