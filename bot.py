@@ -4,7 +4,7 @@ import random
 import requests
 from flask import Flask, request
 from deep_translator import GoogleTranslator
-import feedparser
+import xml.etree.ElementTree as ET
 
 app = Flask(__name__)
 
@@ -23,7 +23,7 @@ DESIGN_CHANNEL_ID = "-1003863206770"
 TRADE_SIGNATURE = "\n\n📊 Alpha Trades | Трейдинг без эмоций"
 DESIGN_SIGNATURE = "\n\n✨ Александр Немцев | Веб-дизайн"
 
-# ========== RSS ДЛЯ НОВОСТЕЙ ==========
+# ========== RSS ДЛЯ НОВОСТЕЙ ДИЗАЙНА ==========
 DESIGN_RSS_FEEDS = [
     "https://habr.com/ru/rss/hub/web_design/all/?fl=ru",
     "https://vc.ru/rss/all?tag=web-design"
@@ -185,7 +185,7 @@ DESIGN_TIPS = [
     "🎨 Не бойся белого пространства.",
 ]
 
-# ========== НАСТРОЙКИ ДЛЯ НОВОСТЕЙ ==========
+# ========== НАСТРОЙКИ ДЛЯ НОВОСТЕЙ ТРЕЙДИНГА ==========
 RUSSIAN_API_URL = "https://cryptocurrency.cv/api/news?lang=ru&limit=10"
 ENGLISH_API_URL = "https://cryptocurrency.cv/api/news?lang=en&limit=10"
 
@@ -390,39 +390,69 @@ def cmd_trade_news(chat_id):
             send_message(TRADE_CHANNEL_ID, caption)
     send_message(chat_id, f"✅ Отправлено {len(news)} новостей")
 
-# ========== НОВОСТИ ДИЗАЙНА ==========
+# ========== НОВОСТИ ДИЗАЙНА (свой RSS парсер) ==========
 
-def fetch_design_news():
-    news_list = []
-    for feed_url in DESIGN_RSS_FEEDS:
-        try:
-            feed = feedparser.parse(feed_url)
-            for entry in feed.entries[:2]:
-                title = entry.title
-                if any(ord(c) > 127 for c in title) == False:
+def parse_rss(url):
+    """Свой парсер RSS без feedparser"""
+    try:
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        root = ET.fromstring(response.content)
+        
+        # Пространства имён RSS
+        ns = {'': 'http://www.w3.org/2005/Atom'}
+        if '{http://www.w3.org/2005/Atom}' in root.tag:
+            ns = {'atom': 'http://www.w3.org/2005/Atom'}
+            items = root.findall('.//atom:entry', ns)
+        else:
+            items = root.findall('.//item')
+        
+        news = []
+        for item in items[:2]:  # Берём 2 последние новости
+            title_elem = item.find('title')
+            link_elem = item.find('link')
+            if title_elem is not None and link_elem is not None:
+                title = title_elem.text
+                link = link_elem.text
+                # Если заголовок на английском — переводим
+                if any(ord(c) < 128 for c in title) and len(title) > 10:
                     try:
                         title = translator.translate(title)
                     except:
                         pass
-                news_list.append({
-                    "title": title,
-                    "link": entry.link
-                })
-        except:
-            pass
-    return news_list[:5]
+                news.append({"title": title, "link": link})
+        return news
+    except Exception as e:
+        print(f"Ошибка парсинга RSS {url}: {e}")
+        return []
+
+def fetch_design_news():
+    """Собирает новости из RSS для дизайна"""
+    all_news = []
+    for feed_url in DESIGN_RSS_FEEDS:
+        news = parse_rss(feed_url)
+        all_news.extend(news)
+    # Убираем дубликаты по ссылкам
+    unique = []
+    seen = set()
+    for item in all_news:
+        if item['link'] not in seen:
+            unique.append(item)
+            seen.add(item['link'])
+    return unique[:5]
 
 def cmd_design_news(chat_id):
+    """Отправляет новости дизайна"""
     send_message(chat_id, "📡 Загружаю новости дизайна...")
     news = fetch_design_news()
     if not news:
-        send_message(chat_id, "❌ Новостей дизайна нет.")
+        send_message(chat_id, "❌ Новостей дизайна сейчас нет.")
         return
     msg = "📰 <b>Новости веб-дизайна</b>\n\n"
     for item in news:
         msg += f"🔹 <a href='{item['link']}'>{item['title']}</a>\n"
     send_message(DESIGN_CHANNEL_ID, msg)
-    send_message(chat_id, f"✅ Отправлено {len(news)} новостей")
+    send_message(chat_id, f"✅ Отправлено {len(news)} новостей дизайна")
 
 # ========== КОМАНДЫ ТРЕЙДИНГА ==========
 
@@ -433,7 +463,6 @@ def cmd_trade_post(chat_id):
         send_message(chat_id, "🏁 Все посты трейдинга опубликованы!")
         return
     post_text = posts[current_index]
-    # Добавляем подпись
     post_text += TRADE_SIGNATURE
     keywords = extract_keywords(post_text)
     image_url = get_image_from_pexels(keywords)
@@ -469,7 +498,6 @@ def cmd_design_post(chat_id):
         send_message(chat_id, "🏁 Все советы дизайна опубликованы!")
         return
     post_text = DESIGN_TIPS[current_index]
-    # Добавляем подпись
     post_text += DESIGN_SIGNATURE
     keywords_map = {
         'шрифт': 'typography',
