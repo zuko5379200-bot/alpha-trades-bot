@@ -2,9 +2,18 @@ import os
 import json
 import random
 import requests
+from flask import Flask
 from deep_translator import GoogleTranslator
 import xml.etree.ElementTree as ET
+import threading
 import time
+
+# ========== FLASK ДЛЯ HEALTH CHECK ==========
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Бот работает! 2 канала, 2 поста в день каждый", 200
 
 # ========== ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ ==========
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -273,8 +282,7 @@ def cmd_trade_post(chat_id):
         send_message(chat_id, "🏁 Все посты трейдинга опубликованы!")
         return
     post_text = posts[current_index] + TRADE_SIGNATURE
-    keywords = 'trading'
-    image_url = get_image_from_pexels(keywords)
+    image_url = get_image_from_pexels('trading')
     if image_url:
         send_photo(TRADE_CHANNEL_ID, image_url, post_text)
     else:
@@ -345,10 +353,20 @@ def cmd_help(chat_id):
 """
     send_message(chat_id, help_text)
 
-# ========== POLLING ==========
+# ========== ЗАПУСК (FLASK + POLLING) ==========
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
+# Запускаем Flask в отдельном потоке
+flask_thread = threading.Thread(target=run_flask, daemon=True)
+flask_thread.start()
+
 print("🚀 Полная версия бота запущена в режиме polling")
 print(f"🤖 Токен: {BOT_TOKEN[:15] if BOT_TOKEN else 'не найден'}...")
+print("✅ Flask сервер запущен для health check")
 
+# ========== POLLING ==========
 last_update_id = 0
 while True:
     try:
@@ -387,6 +405,8 @@ while True:
                         send_message(chat_id, "🤖 Бот работает. Команды: /help")
                     else:
                         send_message(chat_id, "❓ Неизвестная команда. Напиши /help")
+        else:
+            print(f"Ошибка getUpdates: {resp.status_code}")
     except Exception as e:
-        print(f"Ошибка: {e}")
+        print(f"Ошибка в polling: {e}")
     time.sleep(1)
