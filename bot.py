@@ -5,6 +5,8 @@ import requests
 from flask import Flask, request
 from deep_translator import GoogleTranslator
 import xml.etree.ElementTree as ET
+import threading
+import time
 
 app = Flask(__name__)
 
@@ -422,50 +424,64 @@ def cmd_help(chat_id):
 """
     send_message(chat_id, help_text)
 
-# ========== ОБРАБОТКА ВЕБХУКОВ ==========
-
-@app.route('/webhook', methods=['POST'])
-def webhook_legacy():
-    """Обработка старых запросов от Telegram на /webhook"""
-    return webhook()
-
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
-def webhook():
-    """Основной вебхук"""
-    data = request.get_json()
-    if not data or 'message' not in data:
-        return "OK", 200
-    chat_id = data['message']['chat']['id']
-    text = data['message'].get('text', '').lower()
-    print(f"📩 Команда: {text}")
-    if text == '/trade_post':
-        cmd_trade_post(chat_id)
-    elif text == '/trade_news':
-        cmd_trade_news(chat_id)
-    elif text == '/trade_status':
-        cmd_trade_status(chat_id)
-    elif text == '/trade_reset':
-        cmd_trade_reset(chat_id)
-    elif text == '/design_post':
-        cmd_design_post(chat_id)
-    elif text == '/design_news':
-        cmd_design_news(chat_id)
-    elif text == '/design_status':
-        cmd_design_status(chat_id)
-    elif text == '/design_reset':
-        cmd_design_reset(chat_id)
-    elif text == '/status':
-        cmd_status(chat_id)
-    elif text == '/help':
-        cmd_help(chat_id)
-    else:
-        send_message(chat_id, "❓ Неизвестная команда. Напиши /help")
-    return "OK", 200
+# ========== ЗАПУСК С ПОЛЛИНГОМ ==========
 
 @app.route('/')
 def home():
     return "Бот работает! 2 канала, 2 поста в день каждый", 200
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    # Запускаем Flask в отдельном потоке (чтобы Render не убивал)
+    def run_flask():
+        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    
+    threading.Thread(target=run_flask, daemon=True).start()
+    
+    # Polling — бот сам забирает команды
+    last_update_id = 0
+    print("🚀 Бот запущен в режиме polling")
+    print("🤖 Слушаю команды...")
+    
+    while True:
+        try:
+            url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset={last_update_id+1}&timeout=30"
+            resp = requests.get(url, timeout=35)
+            if resp.status_code == 200:
+                updates = resp.json().get('result', [])
+                for update in updates:
+                    last_update_id = update['update_id']
+                    if 'message' in update and 'text' in update['message']:
+                        chat_id = update['message']['chat']['id']
+                        text = update['message']['text'].lower()
+                        print(f"📩 Получена команда: {text}")
+                        
+                        # Обработка команд
+                        if text == '/status':
+                            cmd_status(chat_id)
+                        elif text == '/trade_post':
+                            cmd_trade_post(chat_id)
+                        elif text == '/design_post':
+                            cmd_design_post(chat_id)
+                        elif text == '/trade_news':
+                            cmd_trade_news(chat_id)
+                        elif text == '/design_news':
+                            cmd_design_news(chat_id)
+                        elif text == '/trade_status':
+                            cmd_trade_status(chat_id)
+                        elif text == '/design_status':
+                            cmd_design_status(chat_id)
+                        elif text == '/trade_reset':
+                            cmd_trade_reset(chat_id)
+                        elif text == '/design_reset':
+                            cmd_design_reset(chat_id)
+                        elif text == '/help':
+                            cmd_help(chat_id)
+                        elif text == '/start':
+                            send_message(chat_id, "🤖 Бот работает. Команды: /help")
+                        else:
+                            send_message(chat_id, "❓ Неизвестная команда. Напиши /help")
+            else:
+                print(f"Ошибка getUpdates: {resp.status_code}")
+        except Exception as e:
+            print(f"Ошибка polling: {e}")
+        time.sleep(1)
