@@ -2,7 +2,7 @@ import os
 import json
 import random
 import requests
-from flask import Flask, request
+from flask import Flask
 from deep_translator import GoogleTranslator
 import xml.etree.ElementTree as ET
 import threading
@@ -31,7 +31,7 @@ DESIGN_RSS_FEEDS = [
     "https://vc.ru/rss/all?tag=web-design"
 ]
 
-# ========== 180 СОВЕТОВ ДЛЯ ДИЗАЙНА (первые 20 для компактности, у тебя все 180) ==========
+# ========== 180 СОВЕТОВ ДЛЯ ДИЗАЙНА ==========
 DESIGN_TIPS = [
     "🔥 Используй отступы (padding) — они важнее, чем кажется. 20px вокруг текста спасают дизайн.",
     "🎨 Не больше 3 шрифтов на сайте. Лучше 2: один для заголовков, второй для текста.",
@@ -43,16 +43,6 @@ DESIGN_TIPS = [
     "🖱️ Кнопка должна менять вид при наведении (hover).",
     "📊 95% пользователей не скроллят дальше первого экрана, если их не зацепить.",
     "🌈 Не используй больше 5 цветов на сайте. 3 основных + 2 акцентных.",
-    "📝 Текст на кнопке должен говорить о действии: 'Скачать', а не 'Нажми тут'.",
-    "🎬 Видео на фоне — круто, но добавляй затемнение, чтобы текст читался.",
-    "🔍 Поля ввода делай высотой 48px — золотой стандарт.",
-    "📱 Шрифт на мобильных не меньше 16px.",
-    "🎯 Один экран — одна цель. Не мешай регистрацию и каталог.",
-    "🧩 Используй компоненты в Figma — экономит часы.",
-    "⚡ Оптимизируй картинки. WebP вместо PNG.",
-    "📐 Высота строки 1.5 для текста — читается легче всего.",
-    "🎨 Контрастность текста и фона — проверяй через WebAIM.",
-    "🖼️ Иконки должны быть из одного набора, не мешай стили.",
 ]
 
 # ========== НАСТРОЙКИ ДЛЯ НОВОСТЕЙ ТРЕЙДИНГА ==========
@@ -193,21 +183,23 @@ def send_photo(chat_id, image_url, caption):
             "caption": caption,
             "parse_mode": "HTML"
         })
+        print(f"📸 Фото отправлено в {chat_id}, статус: {r.status_code}")
         return r.status_code == 200
     except Exception as e:
-        print(f"Ошибка фото: {e}")
+        print(f"❌ Ошибка фото: {e}")
         return False
 
 def send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     try:
-        requests.post(url, json={
+        r = requests.post(url, json={
             "chat_id": chat_id,
             "text": text,
             "parse_mode": "HTML"
         })
+        print(f"💬 Сообщение отправлено в {chat_id}, статус: {r.status_code}")
     except Exception as e:
-        print(f"Ошибка: {e}")
+        print(f"❌ Ошибка сообщения: {e}")
 
 # ========== НОВОСТИ ТРЕЙДИНГА ==========
 
@@ -260,31 +252,23 @@ def cmd_trade_news(chat_id):
             send_message(TRADE_CHANNEL_ID, caption)
     send_message(chat_id, f"✅ Отправлено {len(news)} новостей")
 
-# ========== НОВОСТИ ДИЗАЙНА (свой RSS парсер) ==========
+# ========== НОВОСТИ ДИЗАЙНА ==========
 
 def parse_rss(url):
-    """Свой парсер RSS без feedparser"""
     try:
         response = requests.get(url, timeout=15)
         response.raise_for_status()
         root = ET.fromstring(response.content)
-        
         items = root.findall('.//item')
         if not items:
             items = root.findall('.//{http://www.w3.org/2005/Atom}entry')
-        
         news = []
         for item in items[:2]:
             title_elem = item.find('title')
             link_elem = item.find('link')
-            if title_elem is None and '}' in str(item):
-                title_elem = item.find('.//{http://www.w3.org/2005/Atom}title')
-                link_elem = item.find('.//{http://www.w3.org/2005/Atom}link')
-            
             if title_elem is not None and title_elem.text:
                 title = title_elem.text
                 link = link_elem.text if link_elem is not None else '#'
-                
                 if any(ord(c) < 128 for c in title) and len(title) > 10:
                     try:
                         title = translator.translate(title)
@@ -293,14 +277,13 @@ def parse_rss(url):
                 news.append({"title": title, "link": link})
         return news
     except Exception as e:
-        print(f"Ошибка парсинга RSS {url}: {e}")
+        print(f"Ошибка парсинга RSS: {e}")
         return []
 
 def fetch_design_news():
     all_news = []
     for feed_url in DESIGN_RSS_FEEDS:
-        news = parse_rss(feed_url)
-        all_news.extend(news)
+        all_news.extend(parse_rss(feed_url))
     unique = []
     seen = set()
     for item in all_news:
@@ -324,8 +307,10 @@ def cmd_design_news(chat_id):
 # ========== КОМАНДЫ ТРЕЙДИНГА ==========
 
 def cmd_trade_post(chat_id):
+    print(f"📊 cmd_trade_post вызвана для {chat_id}")
     posts = load_trade_posts()
     current_index = load_trade_state()
+    print(f"📊 Всего постов: {len(posts)}, текущий индекс: {current_index}")
     if current_index >= len(posts):
         send_message(chat_id, "🏁 Все посты трейдинга опубликованы!")
         return
@@ -338,12 +323,13 @@ def cmd_trade_post(chat_id):
         if local_img:
             base_url = "https://alpha-trades-bot.onrender.com"
             image_url = f"{base_url}{local_img}"
+    print(f"📸 Картинка: {image_url if image_url else 'не найдена'}")
     if image_url:
         send_photo(TRADE_CHANNEL_ID, image_url, post_text)
     else:
         send_message(TRADE_CHANNEL_ID, post_text)
     save_trade_state(current_index + 1)
-    send_message(chat_id, f"✅ Пост трейдинг #{current_index+1} отправлен!")
+    send_message(chat_id, f"✅ Пост трейдинг #{current_index+1} отправлен в канал!")
 
 def cmd_trade_status(chat_id):
     current_index = load_trade_state()
@@ -360,32 +346,22 @@ def cmd_trade_reset(chat_id):
 # ========== КОМАНДЫ ДИЗАЙНА ==========
 
 def cmd_design_post(chat_id):
+    print(f"🎨 cmd_design_post вызвана для {chat_id}")
     current_index = load_design_state()
     if current_index >= len(DESIGN_TIPS):
         send_message(chat_id, "🏁 Все советы дизайна опубликованы!")
         return
     post_text = DESIGN_TIPS[current_index]
     post_text += DESIGN_SIGNATURE
-    keywords_map = {
-        'шрифт': 'typography',
-        'цвет': 'color palette',
-        'мобильн': 'mobile app design',
-        'figma': 'figma design',
-        'кнопка': 'button ui',
-        'сетка': 'grid layout'
-    }
     kw = 'web design'
-    for ru_kw, en_kw in keywords_map.items():
-        if ru_kw in post_text.lower():
-            kw = en_kw
-            break
     image_url = get_image_from_pexels(kw)
+    print(f"📸 Картинка для дизайна: {image_url if image_url else 'не найдена'}")
     if image_url:
         send_photo(DESIGN_CHANNEL_ID, image_url, post_text)
     else:
         send_message(DESIGN_CHANNEL_ID, post_text)
     save_design_state(current_index + 1)
-    send_message(chat_id, f"✅ Пост дизайн #{current_index+1} отправлен!")
+    send_message(chat_id, f"✅ Пост дизайн #{current_index+1} отправлен в канал!")
 
 def cmd_design_status(chat_id):
     current_index = load_design_state()
@@ -439,8 +415,8 @@ if __name__ == "__main__":
     
     # Polling — бот сам забирает команды
     last_update_id = 0
-    print("🚀 Бот запущен в режиме polling")
-    print("🤖 Слушаю команды...")
+    print("🚀 Бот запущен в режиме polling (вебхуки не нужны)")
+    print("🤖 Слушаю команды каждую секунду...")
     
     while True:
         try:
@@ -453,7 +429,7 @@ if __name__ == "__main__":
                     if 'message' in update and 'text' in update['message']:
                         chat_id = update['message']['chat']['id']
                         text = update['message']['text'].lower()
-                        print(f"📩 Получена команда: {text}")
+                        print(f"📩 Получена команда: {text} от {chat_id}")
                         
                         # Обработка команд
                         if text == '/status':
@@ -483,5 +459,5 @@ if __name__ == "__main__":
             else:
                 print(f"Ошибка getUpdates: {resp.status_code}")
         except Exception as e:
-            print(f"Ошибка polling: {e}")
+            print(f"Ошибка в polling: {e}")
         time.sleep(1)
